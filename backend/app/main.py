@@ -1,19 +1,13 @@
 from uuid import uuid4
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
-from .market_data import get_market_snapshot
+from .market_data import get_market_snapshot, get_candles
 from .schemas import SignalRequest, PaperOrderRequest, PaperOrder
 from .signals import create_baseline_signal
 
-app = FastAPI(title="MARKETPILOT AI API", version="0.2.0", description="Market data adapters and demo intelligence; live execution disabled.")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[settings.frontend_origin],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = FastAPI(title="MARKETPILOT AI API", version="0.3.0", description="Market data, chart candles and demo intelligence; live execution disabled.")
+app.add_middleware(CORSMiddleware, allow_origins=[settings.frontend_origin], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 @app.get("/health")
 def health():
@@ -24,6 +18,17 @@ async def markets(asset_class: str | None = None):
     if asset_class and asset_class not in {"forex", "crypto", "stocks", "indices"}:
         raise HTTPException(400, "Unsupported asset class")
     return await get_market_snapshot(asset_class)
+
+@app.get("/api/candles")
+async def candles(
+    symbol: str = Query(min_length=2, max_length=30),
+    timeframe: str = Query(default="1h"),
+    limit: int = Query(default=150, ge=30, le=500),
+):
+    try:
+        return await get_candles(symbol, timeframe, limit)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 @app.post("/api/signals")
 def signal(req: SignalRequest):
@@ -39,7 +44,7 @@ def analyst(payload: dict):
     if not question:
         raise HTTPException(400, "Question is required")
     if not settings.openai_api_key:
-        return {"mode": "offline", "answer": "OpenAI is not configured. Add OPENAI_API_KEY to backend environment. Market coverage may include demo quotes; check each quote's source."}
+        return {"mode": "offline", "answer": "OpenAI is not configured. Add OPENAI_API_KEY to backend environment. Check the source label on market quotes and charts."}
     try:
         from openai import OpenAI
         response = OpenAI(api_key=settings.openai_api_key).responses.create(
