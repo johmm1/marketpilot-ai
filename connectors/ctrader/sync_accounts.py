@@ -98,7 +98,7 @@ def run():
             complete()
         def heartbeat():
             if state["done"]: return
-            c.send(ProtoHeartbeatEvent()).addErrback(fail)
+            client.send(ProtoHeartbeatEvent()).addErrback(fail)
             state["heartbeat_call"]=reactor.callLater(10,heartbeat)
         def on_connected(c):
             state["heartbeat_call"]=reactor.callLater(10,heartbeat)
