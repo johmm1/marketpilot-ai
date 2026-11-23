@@ -44,10 +44,11 @@ export default function MarketChart({symbol}:{symbol:string}){
  },[]);
  useEffect(()=>{
   let cancelled=false;
+  let hasInitialData=false;
   async function load(){
    setLoading(true);setError('');
    try{
-    const response=await fetch(API+'/api/candles?symbol='+encodeURIComponent(symbol)+'&timeframe='+timeframe+'&limit=150',{cache:'no-store'});
+    const response=await fetch(API+'/api/candles?symbol='+encodeURIComponent(symbol)+'&timeframe='+timeframe+'&limit=1500',{cache:'no-store'});
     if(!response.ok)throw new Error('Could not load chart data');
     const payload:CandleResponse=await response.json();
     if(cancelled)return;
@@ -56,19 +57,19 @@ export default function MarketChart({symbol}:{symbol:string}){
     if(instance?.__candleSeries){
      instance.__candleSeries.setData(payload.candles.map(c=>({time:c.time as UTCTimestamp,open:c.open,high:c.high,low:c.low,close:c.close})));
      instance.__volumeSeries?.setData(payload.candles.map(c=>({time:c.time as UTCTimestamp,value:c.volume,color:c.close>=c.open?'rgba(32,201,151,.35)':'rgba(255,100,124,.35)'})));
-     instance.timeScale().fitContent();
+     if(!hasInitialData){instance.timeScale().fitContent();hasInitialData=true;}
     }
    }catch(e){if(!cancelled)setError(e instanceof Error?e.message:'Chart unavailable')}
    finally{if(!cancelled)setLoading(false)}
   }
   load();
-  const timer=window.setInterval(load,30000);
+  const timer=window.setInterval(load,10000);
   return()=>{cancelled=true;window.clearInterval(timer)};
  },[symbol,timeframe]);
  const latest=candles[candles.length-1];
  return <section className="panel p-4 mb-5">
   <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-   <div><h2 className="font-bold text-lg">Advanced chart · {symbol}</h2><p className="muted text-xs">Candlesticks · volume · crosshair · auto-refresh 30s</p></div>
+   <div><h2 className="font-bold text-lg">Advanced chart · {symbol}</h2><p className="muted text-xs">1,500 candles · volume · crosshair · auto-refresh 10s</p></div>
    <div className="flex gap-1 flex-wrap">{frames.map(frame=><button key={frame} onClick={()=>setTimeframe(frame)} className={'btn text-xs '+(timeframe===frame?'border-cyan-400 text-cyan-200':'')}>{frame}</button>)}</div>
   </div>
   <div className="flex items-center gap-3 text-xs mb-2"><span className={source==='BINANCE'?'text-emerald-300':'text-amber-300'}>● {source} {source==='BINANCE'?'LIVE':'DEMO DATA'}</span>{loading&&<span className="muted">Updating…</span>}{latest&&<span className="muted">Last close: {latest.close.toLocaleString(undefined,{maximumFractionDigits:6})}</span>}</div>
