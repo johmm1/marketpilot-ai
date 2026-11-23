@@ -6,6 +6,7 @@ from .schemas import SignalRequest,PaperOrderRequest
 from .technical_analysis import analyze_candles
 from .paper_ledger import initialize,create_order,get_portfolio
 from .auth import initialize_auth,register,login,logout,current_user
+from .brokers import list_providers,probe_provider
 app=FastAPI(title="MARKETPILOT AI API",version="0.5.0",description="Market data and authenticated paper trading; live execution disabled.")
 app.add_middleware(CORSMiddleware,allow_origins=[settings.frontend_origin],allow_credentials=True,allow_methods=["GET","POST"],allow_headers=["Content-Type"])
 @app.on_event("startup")
@@ -23,6 +24,12 @@ def auth_login(payload:dict,response:Response):
 def auth_logout(request:Request,response:Response): return logout(request,response,settings.app_env=="production")
 @app.get("/api/auth/me")
 def auth_me(user=Depends(current_user)): return user
+@app.get("/api/brokers/providers")
+def broker_providers(): return {"providers":list_providers(),"live_trading_enabled":False}
+@app.get("/api/brokers/probe/{provider_id}")
+async def broker_probe(provider_id:str):
+    try: return await probe_provider(provider_id)
+    except ValueError as exc: raise HTTPException(404,str(exc)) from exc
 @app.get("/api/markets")
 async def markets(asset_class:str|None=None):
     if asset_class and asset_class not in {"forex","crypto","stocks","indices"}: raise HTTPException(400,"Unsupported asset class")
