@@ -117,10 +117,12 @@ def run():
                         "deposit_asset_name":str(getattr(account,"depositAssetName","") or "")
                     })
                 meta=connection["metadata"]
-                meta["accounts"]=accounts
+                secrets_payload=connection["secrets"]
+                secrets_payload["accounts"]=accounts
+                meta["accounts_synced_count"]=len(accounts)
                 meta["last_account_sync"]=datetime.now(timezone.utc).isoformat()
                 save_connection(user_id,"ctrader","cTrader account authorization","authorized",
-                                connection["secrets"],meta)
+                                secrets_payload,meta)
                 demo=next((a for a in accounts if not a["is_live"]),None)
                 if not demo:
                     complete()
@@ -139,11 +141,12 @@ def run():
             if message.payloadType==ProtoOAReconcileRes().payloadType:
                 response=Protobuf.extract(message)
                 meta=connection["metadata"]
-                meta["demo_account_id"]=state["account_id"]
-                meta["demo_reconciliation"]=MessageToDict(response,preserving_proto_field_name=True)
+                secrets_payload=connection["secrets"]
+                secrets_payload["demo_account_id"]=state["account_id"]
+                secrets_payload["demo_reconciliation"]=MessageToDict(response,preserving_proto_field_name=True)
                 meta["last_demo_reconcile"]=datetime.now(timezone.utc).isoformat()
                 save_connection(user_id,"ctrader","cTrader account authorization","authorized",
-                                connection["secrets"],meta)
+                                secrets_payload,meta)
                 complete()
         client.setConnectedCallback(on_connected)
         client.setDisconnectedCallback(lambda _c,_reason: complete())
