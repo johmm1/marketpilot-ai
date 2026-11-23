@@ -125,6 +125,20 @@ py mt5_agent.py
 ```
 Keep the terminal logged into a DEMO account. The bridge deliberately rejects real-account mode. Do not expose the bridge port to the public internet; it makes outbound HTTPS requests to the backend.
 
+## Windows MT5 read-only bridge setup
+
+On the Windows computer that has the official MetaTrader 5 terminal installed:
+```powershell
+cd bridge
+py -m venv .venv
+.\\.venv\\Scripts\\Activate.ps1
+pip install -r requirements.txt
+$env:MARKETPILOT_API_BASE="https://YOUR-BACKEND-URL"
+$env:MARKETPILOT_MT5_BRIDGE_TOKEN="ONE-TIME-TOKEN-FROM-DASHBOARD"
+py mt5_agent.py
+```
+Keep the terminal logged into a DEMO account. The bridge deliberately rejects real-account mode. Do not expose the bridge port to the public internet; it makes outbound HTTPS requests to the backend.
+
 ## Important limitations and production gates
 - Technical analysis is deterministic rule-based computation, not trained machine learning.
 - Signals are educational, not personalized financial advice or return forecasts.
