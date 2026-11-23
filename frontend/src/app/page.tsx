@@ -11,7 +11,7 @@ type Snapshot={mode:string;provider_status?:{crypto?:string;other_markets?:strin
 const API=process.env.NEXT_PUBLIC_API_URL||'http://localhost:8000';
 const filters=['all','forex','crypto','stocks','indices'];
 export default function Home(){
- const [quotes,setQuotes]=useState<Quote[]>([]),[filter,setFilter]=useState('all'),[selected,setSelected]=useState('BTC/USD'),[signal,setSignal]=useState<Signal|null>(null),[question,setQuestion]=useState('What should I check before considering a trade in BTC/USD?'),[answer,setAnswer]=useState(''),[quantity,setQuantity]=useState('1'),[busy,setBusy]=useState(false),[status,setStatus]=useState('Connecting…'),[feedMode,setFeedMode]=useState('DEMO'),[aiStatus,setAiStatus]=useState('Checking OpenAI configuration…');
+ const [quotes,setQuotes]=useState<Quote[]>([]),[filter,setFilter]=useState('all'),[selected,setSelected]=useState('BTC/USD'),[signal,setSignal]=useState<Signal|null>(null),[question,setQuestion]=useState('What should I check before considering a trade in BTC/USD?'),[answer,setAnswer]=useState(''),[quantity,setQuantity]=useState('1'),[busy,setBusy]=useState(false),[status,setStatus]=useState('Connecting…'),[feedMode,setFeedMode]=useState('DEMO'),[aiStatus,setAiStatus]=useState('Checking AI providers…');
  async function refreshMarkets(){
   try{const r=await fetch(API+'/api/markets',{cache:'no-store'});if(!r.ok)throw Error('Market API error');const d:Snapshot=await r.json();setQuotes(d.quotes||[]);setFeedMode(d.mode||'DEMO');setStatus(d.mode==='LIVE'?'Live crypto feed connected':d.mode==='PARTIAL_LIVE'?'Partial live feed · other markets demo':d.mode==='DEMO_FALLBACK'?'Live provider unavailable · demo fallback':'Demo feed connected')}
   catch{setStatus('API offline')}
