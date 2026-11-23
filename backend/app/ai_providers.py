@@ -3,7 +3,6 @@
 Secrets remain in backend environment variables. Groq is text-only in this
 router; chart images are sent only to configured vision-capable providers.
 """
-import base64
 import json
 import os
 import re
