@@ -54,8 +54,10 @@ def refresh_if_needed(user_id):
         raise RuntimeError("cTrader refresh response did not include tokens")
     expires=int(tokens.get("expiresIn",2628000))
     meta["expires_at"]=(datetime.now(timezone.utc)+timedelta(seconds=expires)).isoformat()
-    save_connection(user_id,"ctrader","cTrader account authorization","authorized",
-                    {"access_token":tokens["accessToken"],"refresh_token":tokens["refreshToken"]},meta)
+    refreshed_secrets=connection["secrets"]
+    refreshed_secrets["access_token"]=tokens["accessToken"]
+    refreshed_secrets["refresh_token"]=tokens["refreshToken"]
+    save_connection(user_id,"ctrader","cTrader account authorization","authorized",refreshed_secrets,meta)
     return get_connection(user_id,"ctrader")
 
 
