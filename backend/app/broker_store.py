@@ -96,8 +96,12 @@ def list_connections(user_id: str):
 
 def delete_connection(user_id: str, connection_id: str):
     with _db() as db:
-        cur=db.execute("DELETE FROM broker_connections WHERE id=? AND user_id=?",(connection_id,user_id))
-    if not cur.rowcount: raise HTTPException(404,"Connection not found")
+        row=db.execute("SELECT provider FROM broker_connections WHERE id=? AND user_id=?",
+                       (connection_id,user_id)).fetchone()
+        if not row: raise HTTPException(404,"Connection not found")
+        db.execute("DELETE FROM broker_connections WHERE id=? AND user_id=?",(connection_id,user_id))
+        if row["provider"]=="metatrader5":
+            db.execute("DELETE FROM mt5_bridge_tokens WHERE user_id=?",(user_id,))
     return {"ok":True}
 
 
