@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import HTTPException
 from .paper_ledger import DB_PATH
+from .config import settings
 
 
 def _db():
@@ -14,7 +15,7 @@ def _db():
 
 
 def _fernet():
-    key=os.getenv("BROKER_ENCRYPTION_KEY","").strip()
+    key=(settings.broker_encryption_key or os.getenv("BROKER_ENCRYPTION_KEY","")).strip()
     if not key:
         raise HTTPException(503,"Broker vault is not configured. Set BROKER_ENCRYPTION_KEY on the backend.")
     try:
