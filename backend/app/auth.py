@@ -76,10 +76,10 @@ def current_user(request: Request):
     if not row: raise HTTPException(401,"Session expired. Please sign in again")
     return dict(row)
 
-def logout(request: Request,response: Response):
+def logout(request: Request,response: Response,secure: bool):
     token=request.cookies.get(SESSION_COOKIE)
     if token:
         with _connect() as db:
             db.execute("DELETE FROM user_sessions WHERE token_hash=?",(hashlib.sha256(token.encode()).hexdigest(),))
-    response.delete_cookie(SESSION_COOKIE,path="/",httponly=True,secure=False,samesite="lax")
+    response.delete_cookie(SESSION_COOKIE,path="/",httponly=True,secure=secure,samesite="none" if secure else "lax")
     return {"ok":True}
