@@ -72,6 +72,11 @@ Never paste API secrets into chat. Enter Binance credentials only into the HTTPS
 - `POST /api/paper-orders` — validated simulated paper order.
 - `GET /api/portfolio` — recent paper orders and derived positions.
 - `POST /api/analyst` — optional OpenAI educational analyst.
+- `GET /api/brokers/connections` — signed-in user's saved broker connection metadata (never secrets).
+- `POST /api/brokers/binance/connect` and `GET /api/brokers/binance/account` — save encrypted Binance Testnet credentials and read balances.
+- `GET /api/brokers/ctrader/connect`, `/callback`, and `/status` — OAuth authorization, token exchange and refresh.
+- `POST /api/brokers/mt5-bridge/token`, `POST /api/brokers/mt5-bridge/snapshot`, and `GET /api/brokers/mt5-bridge/snapshot` — pair and inspect the read-only Windows bridge.
+- `DELETE /api/brokers/connections/{id}` — remove a saved connection.
 
 ## Accounts and session security
 
@@ -80,7 +85,7 @@ Never paste API secrets into chat. Enter Binance credentials only into the HTTPS
 - Successful sign-in creates a random, opaque server-side session. The browser receives it in an HttpOnly cookie; the database stores only its SHA-256 hash. Sessions expire after 7 days.
 - Paper orders, the paper portfolio and the AI analyst endpoint require an authenticated session. Each paper order is associated with its account; one account cannot read another account's paper journal through these endpoints.
 - Set `APP_ENV=production`, use HTTPS, and set `FRONTEND_ORIGIN` to the exact deployed frontend origin. Cross-origin frontend requests must include credentials.
-- This is an initial account system, not yet a complete identity platform: email verification, password reset, MFA, account deletion, admin roles, login throttling, security-event audit logs and formal CSRF protections remain to be implemented before public production use. Do not reuse a sensitive password.
+- This is an initial account system, not yet a complete identity platform: email verification, password reset, MFA, account deletion, admin roles, login throttling and security-event audit logs remain to be implemented before public production use. Strict Origin checks protect browser state-changing requests; the MT5 bridge uses a separate bearer token. Do not reuse a sensitive password.
 
 ## Paper trading and storage
 Paper orders are recorded in SQLite, not sent to a broker. The default database path is `backend/marketpilot.db`. Set `MARKETPILOT_DB_PATH` to an absolute path on a persistent mounted disk in production. Many hosting filesystems are ephemeral; without a persistent disk, database contents may be lost on redeploy/restart. The API caps each paper order at 100,000 quote-currency units and retains the latest 200 orders in the portfolio response. This is a prototype journal, not a complete accounting ledger.
@@ -100,7 +105,7 @@ cd frontend
 npm install
 cp .env.example .env.local
 npm run dev
-``
+```
 Open http://localhost:3000 and API docs at http://localhost:8000/docs.
 
 ## Deployment configuration
@@ -134,26 +139,12 @@ py mt5_agent.py
 ```
 Keep the terminal logged into a DEMO account. The bridge deliberately rejects real-account mode. Do not expose the bridge port to the public internet; it makes outbound HTTPS requests to the backend.
 
-## Windows MT5 read-only bridge setup
-
-On the Windows computer that has the official MetaTrader 5 terminal installed:
-```powershell
-cd bridge
-py -m venv .venv
-.\\.venv\\Scripts\\Activate.ps1
-pip install -r requirements.txt
-$env:MARKETPILOT_API_BASE="https://YOUR-BACKEND-URL"
-$env:MARKETPILOT_MT5_BRIDGE_TOKEN="ONE-TIME-TOKEN-FROM-DASHBOARD"
-py mt5_agent.py
-```
-Keep the terminal logged into a DEMO account. The bridge deliberately rejects real-account mode. Do not expose the bridge port to the public internet; it makes outbound HTTPS requests to the backend.
-
 ## Important limitations and production gates
 - Technical analysis is deterministic rule-based computation, not trained machine learning.
 - Signals are educational, not personalized financial advice or return forecasts.
 - Paper order positions are derived from a limited recent-order window; no realized P&L, fees, margin, FX conversion or broker reconciliation is implemented.
-- No broker is connected. Live trading is not implemented and must remain disabled.
+- Broker account connections require the operator's own API credentials and provider approval; repository CI does not authenticate against external user accounts. Live trading is not implemented and must remain disabled.
 - Other asset classes require suitable licensed data providers and exchange/session handling.
-- The Android client is currently an installable PWA, not a signed APK. The Windows Electron installer has not been built or tested by this repository change.
+- The Android client is currently an installable PWA, not a signed APK. A Windows Electron installer was built in an earlier workflow, but it has not been re-tested against a live deployment after these broker changes.
 - Before production trading: implement authentication, authorization, rate limiting, persistent audit logs, a full accounting ledger, realistic fees/slippage, broker paper trading, model evaluation/walk-forward validation, risk limits, kill switch, idempotency, reconciliation, monitoring and explicit user authorization.
 - No profitability is guaranteed. Trading can result in loss.
