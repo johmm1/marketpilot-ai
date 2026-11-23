@@ -18,7 +18,7 @@ app.add_middleware(CORSMiddleware,allow_origins=[settings.frontend_origin],allow
 
 @app.middleware("http")
 async def enforce_browser_origin(request:Request,call_next):
-    if request.method in {"POST","PUT","PATCH","DELETE"} and request.url.path!="/api/brokers/mt5-bridge/snapshot":
+    if request.method in {"POST","PUT","PATCH","DELETE"} and request.url.path not in {"/api/brokers/mt5-bridge/snapshot"} and not request.url.path.startswith("/api/brokers/mt5-bridge/demo-orders/"):
         if request.headers.get("origin") != settings.frontend_origin:
             return Response("Request origin is not allowed",status_code=403)
     return await call_next(request)
