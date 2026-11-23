@@ -54,7 +54,14 @@ Endpoints:
 - `GET /api/brokers/probe/binance` — read-only public connectivity probe (testnet by default).
 - `GET /api/brokers/probe/ctrader` and `GET /api/brokers/probe/metatrader5` — report setup requirements; they do not pretend a connection exists.
 
-No broker credentials are stored yet, no user account is connected, and live execution remains disabled. The next implementation stage is encrypted per-user credential/token storage, cTrader OAuth callback and token refresh, plus a signed-in Windows MT5 bridge with a strict command allowlist. Broker demo-account tests and explicit user consent must pass before any live execution is considered. Never paste API secrets into chat or the frontend; create credentials directly in the broker's official portal and keep withdrawal permissions disabled.
+Broker connection workflows are now implemented as follows:
+- **Credential vault:** per-user credentials and OAuth tokens are encrypted at rest using Fernet. Configure a persistent `BROKER_ENCRYPTION_KEY`; losing/changing it makes existing encrypted connections unreadable. Generate one with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
+- **Binance Spot Testnet:** the dashboard can save a Testnet API key/secret and request signed account information. It does not expose order endpoints. Use read-only permissions and disable withdrawals.
+- **cTrader:** OAuth authorization requests the `accounts` read-only scope. Configure `CTRADER_CLIENT_ID`, `CTRADER_CLIENT_SECRET`, and `CTRADER_REDIRECT_URI`; register that exact redirect URI in the cTrader developer portal. Authorization-code exchange and token refresh are implemented. The Protobuf account-list/account-auth WebSocket handshake is still required to enumerate account IDs and stream account data.
+- **MetaTrader 5:** `bridge/mt5_agent.py` is a Windows companion that pairs using a one-time bearer token and uploads account/positions/pending-order snapshots. It refuses non-demo accounts by default and contains no order-submission calls. Install `bridge/requirements.txt`, configure `MARKETPILOT_API_BASE` and `MARKETPILOT_MT5_BRIDGE_TOKEN`, then run the agent from a Windows host with the official MT5 terminal installed and logged into a demo account.
+- Disconnecting a saved connection removes its encrypted credential record. Generating a new MT5 bridge token invalidates the previous token.
+
+Never paste API secrets into chat. Enter Binance credentials only into the HTTPS dashboard and create them in the broker's official portal. Keep withdrawals disabled. Broker demo-account tests and explicit user consent must pass before any live execution is considered.
 
 ## API
 - `GET /health` — service status and live-execution lock.
@@ -100,9 +107,23 @@ Open http://localhost:3000 and API docs at http://localhost:8000/docs.
 - Set `NEXT_PUBLIC_API_URL` to the deployed backend origin in the frontend environment.
 - Set `FRONTEND_ORIGIN` to the deployed frontend origin in the backend environment.
 - Set `MARKETPILOT_DB_PATH` to a persistent-disk path for a durable paper journal.
-- Set `OPENAI_API_KEY` only in backend secrets; never use a `NEXT_PUBLIC_` prefix for secrets.
+- Set `OPENAI_API_KEY`, `BROKER_ENCRYPTION_KEY`, and cTrader OAuth credentials only in backend secrets; never use a `NEXT_PUBLIC_` prefix for secrets.
 - Configure HTTPS and restrict CORS to the exact frontend origin.
 - Confirm health, market, candle, technical-analysis, portfolio and paper-order endpoints after deployment.
+
+## Windows MT5 read-only bridge setup
+
+On the Windows computer that has the official MetaTrader 5 terminal installed:
+```powershell
+cd bridge
+py -m venv .venv
+.\\.venv\\Scripts\\Activate.ps1
+pip install -r requirements.txt
+$env:MARKETPILOT_API_BASE="https://YOUR-BACKEND-URL"
+$env:MARKETPILOT_MT5_BRIDGE_TOKEN="ONE-TIME-TOKEN-FROM-DASHBOARD"
+py mt5_agent.py
+```
+Keep the terminal logged into a DEMO account. The bridge deliberately rejects real-account mode. Do not expose the bridge port to the public internet; it makes outbound HTTPS requests to the backend.
 
 ## Important limitations and production gates
 - Technical analysis is deterministic rule-based computation, not trained machine learning.
