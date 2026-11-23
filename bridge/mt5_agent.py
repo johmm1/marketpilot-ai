@@ -22,6 +22,8 @@ def snapshot():
         account=mt5.account_info()
         terminal=mt5.terminal_info()
         if account is None: raise RuntimeError(f"MT5 account_info failed: {mt5.last_error()}")
+        if int(account.trade_mode) != 0:
+            raise RuntimeError("Safety stop: this bridge reads DEMO accounts only. Log into a DEMO account in the MT5 terminal.")
         positions=mt5.positions_get()
         orders=mt5.orders_get()
         history=mt5.history_orders_get()
@@ -32,7 +34,7 @@ def snapshot():
                        "company":str(account.company),"currency":str(account.currency),
                        "balance":float(account.balance),"equity":float(account.equity),
                        "margin":float(account.margin),"margin_free":float(account.margin_free),
-                       "profit":float(account.profit),"trade_allowed":bool(account.trade_allowed)},
+                       "profit":float(account.profit),"trade_allowed":bool(account.trade_allowed),"trade_mode":int(account.trade_mode)},
             "terminal":{"connected":bool(terminal.connected) if terminal else False},
             "positions":[safe(x) for x in (positions or [])],
             "pending_orders":[safe(x) for x in (orders or [])],
