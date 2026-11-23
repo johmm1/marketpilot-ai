@@ -82,17 +82,24 @@ def run():
             return
         client=Client(EndPoints.PROTOBUF_DEMO_HOST,EndPoints.PROTOBUF_PORT,TcpProtocol)
         clients.append(client)
-        state={"done":False,"account_ids":[],"user_id":user_id}
+        state={"done":False,"account_ids":[],"user_id":user_id,"heartbeat_call":None}
         def complete():
             if state["done"]: return
             state["done"]=True
+            if state["heartbeat_call"] and state["heartbeat_call"].active():
+                state["heartbeat_call"].cancel()
             try: client.stopService()
             except Exception: pass
             finished()
         def fail(_failure):
             print("cTrader read-only sync failed for one connection.")
             complete()
+        def heartbeat():
+            if state["done"]: return
+            c.send(ProtoHeartbeatEvent()).addErrback(fail)
+            state["heartbeat_call"]=reactor.callLater(10,heartbeat)
         def on_connected(c):
+            state["heartbeat_call"]=reactor.callLater(10,heartbeat)
             req=ProtoOAApplicationAuthReq()
             req.clientId=CLIENT_ID
             req.clientSecret=CLIENT_SECRET
