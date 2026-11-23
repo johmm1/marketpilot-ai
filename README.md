@@ -8,7 +8,7 @@ Responsive Next.js PWA + FastAPI market-intelligence and paper-trading workspace
 - Technical-analysis panel: RSI(14), MACD, EMA(20/50/200), Bollinger Bands, 20-candle support/resistance and volume comparison.
 - Transparent rule-based signal summary derived from candle indicators.
 - Paper portfolio, position summary and recent order journal.
-- Optional OpenAI market-education analyst. API key is backend-only.
+- OpenAI-powered market analyst with contextual chart/quote review, technical-indicator explanations, risk checklists and configurable model. API key is backend-only.
 - Responsive browser UI and installable PWA support.
 
 ## Cross-platform clients
@@ -71,7 +71,8 @@ Never paste API secrets into chat. Enter Binance credentials only into the HTTPS
 - `POST /api/signals` — candle-based educational signal.
 - `POST /api/paper-orders` — validated simulated paper order.
 - `GET /api/portfolio` — recent paper orders and derived positions.
-- `POST /api/analyst` — optional OpenAI educational analyst.
+- `GET /api/ai/status` — reports whether the backend-only OpenAI configuration is present.
+- `POST /api/analyst` — OpenAI market analyst; accepts optional current quote, timeframe and technical-signal context.
 - `GET /api/brokers/connections` — signed-in user's saved broker connection metadata (never secrets).
 - `POST /api/brokers/binance/connect` and `GET /api/brokers/binance/account` — save encrypted Binance Testnet credentials and read balances.
 - `GET /api/brokers/ctrader/connect`, `/callback`, and `/status` — OAuth authorization, token exchange and refresh.
@@ -88,7 +89,7 @@ Never paste API secrets into chat. Enter Binance credentials only into the HTTPS
 - This is an initial account system, not yet a complete identity platform: email verification, password reset, MFA, account deletion, admin roles, login throttling and security-event audit logs remain to be implemented before public production use. Strict Origin checks protect browser state-changing requests; the MT5 bridge uses a separate bearer token. Do not reuse a sensitive password.
 
 ## Paper trading and storage
-Paper orders are recorded in SQLite, not sent to a broker. The default database path is `backend/marketpilot.db`. Set `MARKETPILOT_DB_PATH` to an absolute path on a persistent mounted disk in production. Many hosting filesystems are ephemeral; without a persistent disk, database contents may be lost on redeploy/restart. The API caps each paper order at 100,000 quote-currency units and retains the latest 200 orders in the portfolio response. This is a prototype journal, not a complete accounting ledger.
+Paper orders, user accounts, sessions, broker credential records, OAuth states and bridge tokens use PostgreSQL when `DATABASE_URL` is configured. The backend retains SQLite as a local-development fallback. PostgreSQL is configured with the private `marketpilot` schema and application tables are protected by RLS with no browser-role policies; backend access must use a trusted server-side database credential. Never expose a database password or service-role key in the frontend. Paper orders are simulated only and are not sent to a broker. The API caps each paper order at 100,000 quote-currency units and returns the latest 200 orders. This remains a starter journal, not a complete accounting ledger.
 
 ## Run backend
 ```bash
@@ -111,8 +112,8 @@ Open http://localhost:3000 and API docs at http://localhost:8000/docs.
 ## Deployment configuration
 - Set `NEXT_PUBLIC_API_URL` to the deployed backend origin in the frontend environment.
 - Set `FRONTEND_ORIGIN` to the deployed frontend origin in the backend environment.
-- Set `MARKETPILOT_DB_PATH` to a persistent-disk path for a durable paper journal.
-- Set `OPENAI_API_KEY`, `BROKER_ENCRYPTION_KEY`, and cTrader OAuth credentials only in backend secrets; never use a `NEXT_PUBLIC_` prefix for secrets.
+- Set `DATABASE_URL` to the dedicated Supabase PostgreSQL connection string in the Render backend environment.
+- Set `OPENAI_API_KEY`, `OPENAI_MODEL`, `BROKER_ENCRYPTION_KEY`, and cTrader OAuth credentials only in backend secrets; never use a `NEXT_PUBLIC_` prefix for secrets.
 - Configure HTTPS and restrict CORS to the exact frontend origin.
 - Confirm health, market, candle, technical-analysis, portfolio and paper-order endpoints after deployment.
 

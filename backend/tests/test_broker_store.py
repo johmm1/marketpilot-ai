@@ -4,14 +4,14 @@ import tempfile
 import unittest
 from cryptography.fernet import Fernet
 from fastapi import HTTPException
-from backend.app import broker_store
+from backend.app import broker_store, db
 
 
 class BrokerStoreTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
-        broker_store.DB_PATH=os.path.join(self.temp.name,"test.db")
-        os.environ["BROKER_ENCRYPTION_KEY"]=Fernet.generate_key().decode()
+        db.DB_PATH=os.path.join(self.temp.name,"test.db")
+        broker_store.settings.broker_encryption_key=Fernet.generate_key().decode()
         with sqlite3.connect(broker_store.DB_PATH) as db:
             db.execute("CREATE TABLE users (id TEXT PRIMARY KEY)")
             db.execute("INSERT INTO users(id) VALUES ('user-a')")
@@ -19,7 +19,7 @@ class BrokerStoreTests(unittest.TestCase):
         broker_store.initialize_broker_store()
 
     def tearDown(self):
-        os.environ.pop("BROKER_ENCRYPTION_KEY",None)
+        broker_store.settings.broker_encryption_key=""
         self.temp.cleanup()
 
     def test_credentials_are_encrypted_and_user_scoped(self):
@@ -46,7 +46,7 @@ class BrokerStoreTests(unittest.TestCase):
         with self.assertRaises(HTTPException):
             broker_store.verify_mt5_bridge_token(first)
         broker_store.save_connection("user-a","metatrader5","Windows MT5 bridge","read_only",{"snapshot":{}})
-        broker_store.delete_connection("user-a",broker_store.list_connections("user-a")[0]["id"])
+        mt5=next(item for item in broker_store.list_connections("user-a") if item["provider"]=="metatrader5")\n        broker_store.delete_connection("user-a",mt5["id"])
         with self.assertRaises(HTTPException):
             broker_store.verify_mt5_bridge_token(second)
 
