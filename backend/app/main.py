@@ -20,7 +20,7 @@ def auth_register(payload:dict,response:Response):
 def auth_login(payload:dict,response:Response):
     return login(str(payload.get("email","")),str(payload.get("password","")),response,settings.app_env=="production")
 @app.post("/api/auth/logout")
-def auth_logout(request:Request,response:Response): return logout(request,response)
+def auth_logout(request:Request,response:Response): return logout(request,response,settings.app_env=="production")
 @app.get("/api/auth/me")
 def auth_me(user=Depends(current_user)): return user
 @app.get("/api/markets")
