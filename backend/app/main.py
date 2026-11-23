@@ -146,8 +146,13 @@ async def ctrader_status(user=Depends(current_user)):
         expires=int(refreshed.get("expiresIn",2628000))
         metadata={"expires_at":(datetime.now(timezone.utc)+timedelta(seconds=expires)).isoformat(),
                   "scope":"accounts"}
+        refreshed_secrets=connection["secrets"]
+        refreshed_secrets["access_token"]=refreshed["accessToken"]
+        refreshed_secrets["refresh_token"]=refreshed["refreshToken"]
         save_connection(user["id"],"ctrader","cTrader account authorization","authorized",
-                        {"access_token":refreshed["accessToken"],"refresh_token":refreshed["refreshToken"]},metadata)
+                        refreshed_secrets,metadata)
+        connection["secrets"]=refreshed_secrets
+        connection["metadata"]=metadata
         expires_at=datetime.fromisoformat(metadata["expires_at"])
     return {"provider":"ctrader","authorized":True,"scope":"accounts",
             "token_expires_at":expires_at.isoformat(),
