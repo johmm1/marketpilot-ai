@@ -1,4 +1,7 @@
-from fastapi import FastAPI, HTTPException, Query, Depends, Request, Response
+from fastapi import FastAPI, HTTPException, Query, Depends, Request, Response, Header
+from fastapi.responses import RedirectResponse
+import os, time, hmac, hashlib
+from urllib.parse import urlencode
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .market_data import get_market_snapshot,get_candles
@@ -7,11 +10,13 @@ from .technical_analysis import analyze_candles
 from .paper_ledger import initialize,create_order,get_portfolio
 from .auth import initialize_auth,register,login,logout,current_user
 from .brokers import list_providers,probe_provider
+from .broker_store import (initialize_broker_store,save_connection,get_connection,list_connections,delete_connection,create_oauth_state,consume_oauth_state,create_mt5_bridge_token,verify_mt5_bridge_token)
+import httpx
 app=FastAPI(title="MARKETPILOT AI API",version="0.5.0",description="Market data and authenticated paper trading; live execution disabled.")
 app.add_middleware(CORSMiddleware,allow_origins=[settings.frontend_origin],allow_credentials=True,allow_methods=["GET","POST"],allow_headers=["Content-Type"])
 @app.on_event("startup")
 def startup():
-    initialize(); initialize_auth()
+    initialize(); initialize_auth(); initialize_broker_store()
 @app.get("/health")
 def health(): return {"status":"ok","environment":settings.app_env,"live_trading_enabled":False,"paper_ledger":"sqlite","authentication":"cookie_session"}
 @app.post("/api/auth/register")
@@ -30,6 +35,143 @@ def broker_providers(): return {"providers":list_providers(),"live_trading_enabl
 async def broker_probe(provider_id:str):
     try: return await probe_provider(provider_id)
     except ValueError as exc: raise HTTPException(404,str(exc)) from exc
+
+def _require_frontend_origin(request: Request):
+    if request.headers.get("origin") != settings.frontend_origin:
+        raise HTTPException(403,"Request origin is not allowed")
+
+@app.get("/api/brokers/connections")
+def broker_connections(user=Depends(current_user)):
+    return {"connections":list_connections(user["id"])}
+
+@app.delete("/api/brokers/connections/{connection_id}")
+def broker_disconnect(connection_id:str,user=Depends(current_user)):
+    return delete_connection(user["id"],connection_id)
+
+@app.post("/api/brokers/binance/connect")
+def binance_connect(payload:dict,request:Request,user=Depends(current_user)):
+    _require_frontend_origin(request)
+    api_key=str(payload.get("api_key","")).strip()
+    api_secret=str(payload.get("api_secret","")).strip()
+    label=str(payload.get("label","Binance Spot Testnet")).strip()[:60]
+    if not (20<=len(api_key)<=256 and 20<=len(api_secret)<=256):
+        raise HTTPException(400,"Enter valid Binance API key and secret values")
+    return save_connection(user["id"],"binance",label,"testnet",
+                           {"api_key":api_key,"api_secret":api_secret},
+                           {"permission_guidance":"Read-only API key recommended; withdrawals disabled."})
+
+@app.get("/api/brokers/binance/account")
+async def binance_account(user=Depends(current_user)):
+    connection=get_connection(user["id"],"binance")
+    creds=connection["secrets"]
+    timestamp=int(time.time()*1000)
+    query=f"recvWindow=5000&timestamp={timestamp}"
+    signature=hmac.new(creds["api_secret"].encode(),query.encode(),hashlib.sha256).hexdigest()
+    url="https://testnet.binance.vision/api/v3/account?"+query+"&signature="+signature
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            response=await client.get(url,headers={"X-MBX-APIKEY":creds["api_key"]})
+            response.raise_for_status()
+            data=response.json()
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(502,"Binance Testnet rejected the account request. Check API key permissions and Testnet environment.") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(502,"Binance Testnet is temporarily unreachable") from exc
+    balances=[{"asset":b["asset"],"free":b["free"],"locked":b["locked"]}
+              for b in data.get("balances",[]) if float(b.get("free",0) or 0)>0 or float(b.get("locked",0) or 0)>0]
+    return {"provider":"binance","environment":"testnet","account_type":data.get("accountType"),
+            "can_trade":bool(data.get("canTrade")),"can_withdraw":bool(data.get("canWithdraw")),
+            "balances":balances,"live_order_submission":False}
+
+@app.get("/api/brokers/ctrader/connect")
+def ctrader_connect(user=Depends(current_user)):
+    if not (settings.ctrader_client_id and settings.ctrader_client_secret and settings.ctrader_redirect_uri):
+        raise HTTPException(503,"Configure CTRADER_CLIENT_ID, CTRADER_CLIENT_SECRET and CTRADER_REDIRECT_URI on the backend first.")
+    state=create_oauth_state(user["id"],"ctrader")
+    params=urlencode({"client_id":settings.ctrader_client_id,"redirect_uri":settings.ctrader_redirect_uri,
+                      "scope":"accounts","product":"web","state":state})
+    return {"authorization_url":"https://id.ctrader.com/my/settings/openapi/grantingaccess/?"+params,
+            "scope":"accounts","environment":"demo_and_live_authorization_supported",
+            "note":"This requests account-read access only. Trading permission is not requested."}
+
+@app.get("/api/brokers/ctrader/callback")
+async def ctrader_callback(code:str,state:str):
+    user_id=consume_oauth_state(state,"ctrader")
+    params={"grant_type":"authorization_code","code":code,"redirect_uri":settings.ctrader_redirect_uri,
+            "client_id":settings.ctrader_client_id,"client_secret":settings.ctrader_client_secret}
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response=await client.get("https://openapi.ctrader.com/apps/token",params=params,
+                                     headers={"Accept":"application/json"})
+            response.raise_for_status()
+            token_data=response.json()
+    except httpx.HTTPError as exc:
+        raise HTTPException(502,"cTrader token exchange failed. Restart authorization and try again.") from exc
+    if not token_data.get("accessToken") or not token_data.get("refreshToken"):
+        raise HTTPException(502,"cTrader did not return the expected authorization tokens")
+    expires=int(token_data.get("expiresIn",2628000))
+    from datetime import datetime,timezone,timedelta
+    expires_at=(datetime.now(timezone.utc)+timedelta(seconds=expires)).isoformat()
+    save_connection(user_id,"ctrader","cTrader account authorization","authorized",
+                    {"access_token":token_data["accessToken"],"refresh_token":token_data["refreshToken"]},
+                    {"expires_at":expires_at,"scope":"accounts"})
+    return RedirectResponse(settings.frontend_origin+"/?broker=ctrader_authorized",status_code=303)
+
+@app.get("/api/brokers/ctrader/status")
+async def ctrader_status(user=Depends(current_user)):
+    connection=get_connection(user["id"],"ctrader")
+    from datetime import datetime,timezone,timedelta
+    expires_at=datetime.fromisoformat(connection["metadata"]["expires_at"])
+    if expires_at<=datetime.now(timezone.utc)+timedelta(minutes=3):
+        params={"grant_type":"refresh_token","refresh_token":connection["secrets"]["refresh_token"],
+                "client_id":settings.ctrader_client_id,"client_secret":settings.ctrader_client_secret}
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response=await client.post("https://openapi.ctrader.com/apps/token",params=params,
+                                           headers={"Accept":"application/json"})
+                response.raise_for_status()
+                refreshed=response.json()
+        except httpx.HTTPError as exc:
+            raise HTTPException(502,"cTrader token refresh failed; reconnect the account if needed.") from exc
+        if not refreshed.get("accessToken") or not refreshed.get("refreshToken"):
+            raise HTTPException(502,"cTrader token refresh returned an invalid response")
+        expires=int(refreshed.get("expiresIn",2628000))
+        metadata={"expires_at":(datetime.now(timezone.utc)+timedelta(seconds=expires)).isoformat(),
+                  "scope":"accounts"}
+        save_connection(user["id"],"ctrader","cTrader account authorization","authorized",
+                        {"access_token":refreshed["accessToken"],"refresh_token":refreshed["refreshToken"]},metadata)
+        expires_at=datetime.fromisoformat(metadata["expires_at"])
+    return {"provider":"ctrader","authorized":True,"scope":"accounts",
+            "token_expires_at":expires_at.isoformat(),
+            "account_discovery":"Open API account-list handshake is the next connection stage",
+            "live_order_submission":False}
+
+@app.post("/api/brokers/mt5-bridge/token")
+def mt5_bridge_pair(request:Request,user=Depends(current_user)):
+    _require_frontend_origin(request)
+    token=create_mt5_bridge_token(user["id"])
+    return {"bridge_token":token,"instructions":"Copy this token into the Windows bridge environment variable MARKETPILOT_MT5_BRIDGE_TOKEN. It is shown once; generate a new token if lost.","live_order_submission":False}
+
+@app.post("/api/brokers/mt5-bridge/snapshot")
+def mt5_bridge_snapshot(payload:dict,authorization:str|None=Header(default=None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401,"Bridge bearer token required")
+    user_id=verify_mt5_bridge_token(authorization[7:])
+    account=payload.get("account") or {}
+    if not account.get("login") or not account.get("server"):
+        raise HTTPException(400,"MT5 snapshot is missing account identity")
+    save_connection(user_id,"metatrader5","Windows MT5 bridge","read_only",
+                    {"snapshot":payload},
+                    {"account_login":str(account["login"]),"server":str(account["server"]),
+                     "currency":str(account.get("currency","")),"mode":"read_only_snapshot"})
+    return {"ok":True,"received_at":int(time.time()),"live_order_submission":False}
+
+@app.get("/api/brokers/mt5-bridge/snapshot")
+def mt5_bridge_read(user=Depends(current_user)):
+    connection=get_connection(user["id"],"metatrader5","Windows MT5 bridge")
+    return {"provider":"metatrader5","environment":"read_only_bridge",
+            "snapshot":connection["secrets"]["snapshot"],"live_order_submission":False}
+
 @app.get("/api/markets")
 async def markets(asset_class:str|None=None):
     if asset_class and asset_class not in {"forex","crypto","stocks","indices"}: raise HTTPException(400,"Unsupported asset class")
