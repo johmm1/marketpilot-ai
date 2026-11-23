@@ -86,12 +86,36 @@ async def get_candles(symbol: str, timeframe: str = "1h", limit: int = 150):
     if provider_symbol:
         try:
             async with httpx.AsyncClient(timeout=7.0) as client:
-                response = await client.get(
-                    "https://api.binance.com/api/v3/klines",
-                    params={"symbol": provider_symbol, "interval": BINANCE_INTERVALS[timeframe], "limit": limit},
-                )
-                response.raise_for_status()
-                rows = response.json()
+                if limit <= 1000:
+                    response = await client.get(
+                        "https://api.binance.com/api/v3/klines",
+                        params={"symbol": provider_symbol, "interval": BINANCE_INTERVALS[timeframe], "limit": limit},
+                    )
+                    response.raise_for_status()
+                    rows = response.json()
+                else:
+                    # Binance caps each klines request at 1,000; fetch the
+                    # latest 1,000 and then the preceding candles in a second call.
+                    latest_response = await client.get(
+                        "https://api.binance.com/api/v3/klines",
+                        params={"symbol": provider_symbol, "interval": BINANCE_INTERVALS[timeframe], "limit": 1000},
+                    )
+                    latest_response.raise_for_status()
+                    latest_rows = latest_response.json()
+                    if latest_rows:
+                        earlier_response = await client.get(
+                            "https://api.binance.com/api/v3/klines",
+                            params={
+                                "symbol": provider_symbol,
+                                "interval": BINANCE_INTERVALS[timeframe],
+                                "limit": limit - 1000,
+                                "endTime": int(latest_rows[0][0]) - 1,
+                            },
+                        )
+                        earlier_response.raise_for_status()
+                        rows = earlier_response.json() + latest_rows
+                    else:
+                        rows = []
             candles = [{
                 "time": int(row[0]) // 1000,
                 "open": float(row[1]), "high": float(row[2]),
