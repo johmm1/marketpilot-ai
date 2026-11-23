@@ -1,0 +1,16 @@
+'use client';
+import {useEffect,useState} from 'react';
+type Analysis={source:string;mode:string;candle_count:number;last_price:number;signal:{action:string;score:number};indicators:Record<string,number|null>;limitations:string[]};
+const API=process.env.NEXT_PUBLIC_API_URL||'http://localhost:8000';
+export default function TechnicalAnalysis({symbol}:{symbol:string}){
+ const [data,setData]=useState<Analysis|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(false);
+ useEffect(()=>{let cancelled=false;async function load(){setLoading(true);try{const r=await fetch(API+'/api/technical-analysis?symbol='+encodeURIComponent(symbol)+'&timeframe=1h',{cache:'no-store'});if(!r.ok)throw Error('Analysis unavailable');const d=await r.json();if(!cancelled)setData(d)}catch(e){if(!cancelled)setError(e instanceof Error?e.message:'Unavailable')}finally{if(!cancelled)setLoading(false)}}load();const timer=window.setInterval(load,60000);return()=>{cancelled=true;window.clearInterval(timer)}},[symbol]);
+ const labels:[string,string][]=[['RSI (14)','rsi_14'],['MACD','macd'],['MACD signal','macd_signal'],['EMA 20','ema_20'],['EMA 50','ema_50'],['EMA 200','ema_200'],['Bollinger upper','bollinger_upper'],['Bollinger middle','bollinger_middle'],['Bollinger lower','bollinger_lower'],['Support (20)','support_20'],['Resistance (20)','resistance_20'],['Volume','volume']];
+ const fmt=(v:number|null)=>v===null?'Need more candles':v.toLocaleString(undefined,{maximumFractionDigits:5});
+ return <section className="panel p-4 mb-5"><div className="flex justify-between gap-3 flex-wrap"><div><h2 className="font-bold text-lg">Technical analysis · {symbol}</h2><p className="muted text-xs">1h candles · RSI, MACD, EMA, Bollinger Bands and 20-candle levels</p></div><span className={data?.source==='BINANCE'?'text-emerald-300':'text-amber-300'}>{data?.source||'—'} {data?.source==='BINANCE'?'LIVE':'DEMO'}</span></div>
+ {loading&&!data&&<p className="muted text-sm mt-4">Calculating indicators…</p>}{error&&<p className="text-rose-300 text-sm mt-3">{error}</p>}
+ {data&&<><div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4"><div className="rounded-xl bg-slate-950 p-3"><p className="muted text-xs">Rule-based signal</p><b className="text-xl">{data.signal.action}</b><p className="muted text-xs">Score {data.signal.score}/4</p></div><div className="rounded-xl bg-slate-950 p-3"><p className="muted text-xs">Latest close</p><b>{fmt(data.last_price)}</b></div><div className="rounded-xl bg-slate-950 p-3"><p className="muted text-xs">Candles analyzed</p><b>{data.candle_count}</b></div><div className="rounded-xl bg-slate-950 p-3"><p className="muted text-xs">Timeframe</p><b>1 hour</b></div></div>
+ <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">{labels.map(([label,key])=><div className="rounded-lg border border-slate-800 p-3" key={key}><p className="muted text-xs">{label}</p><p className="font-semibold text-sm mt-1">{fmt(data.indicators[key])}</p></div>)}</div>
+ <p className="muted text-xs mt-3">Analysis inherits candle provenance. DEMO candles mean DEMO indicators. Missing long-period indicators are not fabricated.</p><ul className="muted text-xs mt-2 list-disc pl-5">{data.limitations.map(x=><li key={x}>{x}</li>)}</ul></>}
+ </section>
+}
