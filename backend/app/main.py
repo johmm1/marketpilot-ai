@@ -151,7 +151,12 @@ async def ctrader_status(user=Depends(current_user)):
         expires_at=datetime.fromisoformat(metadata["expires_at"])
     return {"provider":"ctrader","authorized":True,"scope":"accounts",
             "token_expires_at":expires_at.isoformat(),
-            "account_discovery":"Open API account-list handshake is the next connection stage",
+            "accounts":connection["metadata"].get("accounts",[]),
+            "demo_account_id":connection["metadata"].get("demo_account_id"),
+            "demo_reconciliation":connection["metadata"].get("demo_reconciliation"),
+            "last_account_sync":connection["metadata"].get("last_account_sync"),
+            "last_demo_reconcile":connection["metadata"].get("last_demo_reconcile"),
+            "sync_worker":"Run connectors/ctrader/sync_accounts.py to discover accounts and refresh the demo account snapshot",
             "live_order_submission":False}
 
 @app.post("/api/brokers/mt5-bridge/token")
