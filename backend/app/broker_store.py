@@ -118,3 +118,40 @@ def verify_mt5_bridge_token(token: str) -> str:
         if row: db.execute("UPDATE mt5_bridge_tokens SET last_seen_at=? WHERE token_hash=?",(now,digest))
     if not row: raise HTTPException(401,"Invalid bridge token")
     return str(row["user_id"])
+
+def initialize_mt5_demo_orders():
+    with connect() as db:
+        db.execute("""CREATE TABLE IF NOT EXISTS mt5_demo_orders (
+            id TEXT PRIMARY KEY, user_id TEXT NOT NULL, symbol TEXT NOT NULL,
+            side TEXT NOT NULL, volume REAL NOT NULL, stop_loss REAL NOT NULL,
+            take_profit REAL NOT NULL, status TEXT NOT NULL, result_json TEXT,
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL)""")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_mt5_demo_orders_user_status ON mt5_demo_orders(user_id,status)")
+
+def queue_mt5_demo_order(user_id: str, symbol: str, side: str, volume: float, stop_loss: float, take_profit: float):
+    import uuid
+    order_id=str(uuid.uuid4()); now=datetime.now(timezone.utc)
+    with connect() as db:
+        pending=db.execute("SELECT id FROM mt5_demo_orders WHERE user_id=? AND status IN ('queued','claimed') LIMIT 1",(user_id,)).fetchone()
+        if pending: raise HTTPException(409,"A demo trade is already awaiting execution. Wait for its result first.")
+        db.execute("""INSERT INTO mt5_demo_orders
+            (id,user_id,symbol,side,volume,stop_loss,take_profit,status,created_at,updated_at)
+            VALUES (?,?,?,?,?,?,?,'queued',?,?)""",
+            (order_id,user_id,symbol,side,volume,stop_loss,take_profit,now,now))
+    return {"order_id":order_id,"status":"queued","message":"Demo order queued. The connected Windows MT5 bridge must be running."}
+
+def claim_mt5_demo_order(user_id: str):
+    now=datetime.now(timezone.utc)
+    with connect() as db:
+        row=db.execute("SELECT * FROM mt5_demo_orders WHERE user_id=? AND status='queued' ORDER BY created_at LIMIT 1",(user_id,)).fetchone()
+        if not row: return None
+        db.execute("UPDATE mt5_demo_orders SET status='claimed',updated_at=? WHERE id=? AND status='queued'",(now,row["id"]))
+        return dict(row)
+
+def finish_mt5_demo_order(order_id: str, user_id: str, status: str, result: dict):
+    if status not in {"executed","rejected","failed"}: raise HTTPException(400,"Invalid result status")
+    now=datetime.now(timezone.utc)
+    with connect() as db:
+        db.execute("UPDATE mt5_demo_orders SET status=?,result_json=?,updated_at=? WHERE id=? AND user_id=?",
+                   (status,json.dumps(result,separators=(",",":")),now,order_id,user_id))
+    return {"ok":True,"status":status}
