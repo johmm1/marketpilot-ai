@@ -9,9 +9,9 @@ Set these in the MARKETPILOT backend service environment:
 | Variable | Purpose | Suggested value |
 |---|---|---|
 | `GEMINI_API_KEY` | Gemini text and chart-image analysis | Your Google AI Studio key |
-| `GEMINI_MODEL` | Gemini model | `gemini-2.5-flash` |
+| `GEMINI_MODEL` | Gemini model | `gemini-3.1-flash-lite` |
 | `GROQ_API_KEY` | Groq text-analysis fallback | Your Groq console key |
-| `GROQ_MODEL` | Groq text model | `llama-3.3-70b-versatile` |
+| `GROQ_MODEL` | Groq text model | `openai/gpt-oss-20b` |
 | `OPENAI_API_KEY` | Optional text and image fallback | Your OpenAI API key |
 | `OPENAI_MODEL` | OpenAI model | Keep the currently supported model for your account |
 | `MARKETPILOT_AI_PRIMARY` | Preferred provider | `gemini`, `groq`, or `openai` |
