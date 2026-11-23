@@ -41,6 +41,21 @@ The installer is generated under `desktop/release/`. For local development, star
 - Synthetic candles are not historical market records. Indicators calculated from them are also DEMO.
 - Provider outages fall back to demo candles; the app labels this rather than implying a live feed.
 
+## Multi-broker integration foundation
+
+The backend now has a provider registry and a read-only connectivity probe. The initial provider targets are:
+
+- **Binance Spot** — official REST/WebSocket API family. The current probe checks public API reachability only; it does not authenticate to an account or place orders. It defaults to Spot Testnet. Set `BINANCE_API_ENV=production` only to probe the production public endpoint.
+- **cTrader** — official cTrader Open API using OAuth 2.0 authorization and JSON/Protobuf messaging. Each user must authorize their own cTrader ID and choose a demo/live account.
+- **MetaTrader 5** — official MetaTrader Python integration communicates with a locally installed Windows terminal. This requires a separate Windows bridge/agent; it is not a cloud REST API and cannot be safely treated as a browser plugin.
+
+Endpoints:
+- `GET /api/brokers/providers` — supported provider metadata, capabilities and setup requirements.
+- `GET /api/brokers/probe/binance` — read-only public connectivity probe (testnet by default).
+- `GET /api/brokers/probe/ctrader` and `GET /api/brokers/probe/metatrader5` — report setup requirements; they do not pretend a connection exists.
+
+No broker credentials are stored yet, no user account is connected, and live execution remains disabled. The next implementation stage is encrypted per-user credential/token storage, cTrader OAuth callback and token refresh, plus a signed-in Windows MT5 bridge with a strict command allowlist. Broker demo-account tests and explicit user consent must pass before any live execution is considered. Never paste API secrets into chat or the frontend; create credentials directly in the broker's official portal and keep withdrawal permissions disabled.
+
 ## API
 - `GET /health` — service status and live-execution lock.
 - `GET /api/markets?asset_class=crypto` — quotes and feed status.
