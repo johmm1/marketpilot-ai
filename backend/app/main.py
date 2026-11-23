@@ -10,7 +10,7 @@ from .technical_analysis import analyze_candles
 from .paper_ledger import initialize,create_order,get_portfolio
 from .auth import initialize_auth,register,login,logout,current_user
 from .brokers import list_providers,probe_provider
-from .broker_store import (initialize_broker_store,save_connection,get_connection,list_connections,delete_connection,create_oauth_state,consume_oauth_state,create_mt5_bridge_token,verify_mt5_bridge_token)
+from .broker_store import (initialize_broker_store,save_connection,get_connection,list_connections,delete_connection,create_oauth_state,consume_oauth_state,create_mt5_bridge_token,verify_mt5_bridge_token,initialize_mt5_demo_orders,queue_mt5_demo_order,claim_mt5_demo_order,finish_mt5_demo_order)
 import httpx
 from .db import connect
 app=FastAPI(title="MARKETPILOT AI API",version="0.6.0",description="Multi-market intelligence, OpenAI analyst and persistent paper trading; live execution remains locked.")
@@ -26,7 +26,7 @@ async def enforce_browser_origin(request:Request,call_next):
 @app.on_event("startup")
 def startup():
     try:
-        initialize(); initialize_auth(); initialize_broker_store()
+        initialize(); initialize_auth(); initialize_broker_store(); initialize_mt5_demo_orders()
     except Exception as exc:
         if not settings.database_url:
             raise
@@ -204,6 +204,39 @@ def mt5_bridge_snapshot(payload:dict,authorization:str|None=Header(default=None)
                     {"account_login":str(account["login"]),"server":str(account["server"]),
                      "currency":str(account.get("currency","")),"mode":"read_only_snapshot"})
     return {"ok":True,"received_at":int(time.time()),"live_order_submission":False}
+
+@app.post("/api/brokers/mt5-bridge/demo-orders")
+def mt5_demo_order(payload:dict,request:Request,user=Depends(current_user)):
+    _require_frontend_origin(request)
+    symbol=str(payload.get("symbol","")).strip().upper()
+    side=str(payload.get("side","")).strip().upper()
+    try:
+        volume=float(payload.get("volume",0))
+        sl=float(payload.get("stop_loss",0)); tp=float(payload.get("take_profit",0))
+    except (TypeError,ValueError):
+        raise HTTPException(400,"Volume, stop loss and take profit must be numbers")
+    if not symbol or len(symbol)>32 or side not in {"BUY","SELL"}:
+        raise HTTPException(400,"Enter a valid symbol and BUY or SELL side")
+    if not (0 < volume <= 0.10):
+        raise HTTPException(400,"Version 1 demo limit: volume must be greater than zero and no more than 0.10 lots")
+    if sl<=0 or tp<=0 or sl==tp:
+        raise HTTPException(400,"A valid stop-loss and take-profit are mandatory for demo orders")
+    return queue_mt5_demo_order(user["id"],symbol,side,volume,sl,tp)
+
+@app.get("/api/brokers/mt5-bridge/demo-orders/next")
+def mt5_demo_order_next(authorization:str|None=Header(default=None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401,"Bridge bearer token required")
+    user_id=verify_mt5_bridge_token(authorization[7:])
+    return {"order":claim_mt5_demo_order(user_id)}
+
+@app.post("/api/brokers/mt5-bridge/demo-orders/{order_id}/result")
+def mt5_demo_order_result(order_id:str,payload:dict,authorization:str|None=Header(default=None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401,"Bridge bearer token required")
+    user_id=verify_mt5_bridge_token(authorization[7:])
+    result=payload.get("result") if isinstance(payload.get("result"),dict) else {}
+    return finish_mt5_demo_order(order_id,user_id,str(payload.get("status","failed")),result)
 
 @app.get("/api/brokers/mt5-bridge/snapshot")
 def mt5_bridge_read(user=Depends(current_user)):
