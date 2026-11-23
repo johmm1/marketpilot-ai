@@ -51,6 +51,15 @@ The installer is generated under `desktop/release/`. For local development, star
 - `GET /api/portfolio` — recent paper orders and derived positions.
 - `POST /api/analyst` — optional OpenAI educational analyst.
 
+## Accounts and session security
+
+- The dashboard requires an account. Register with an email address and a password of at least 12 characters.
+- Passwords are stored as PBKDF2-HMAC-SHA256 hashes with per-password random salts; raw passwords are not stored.
+- Successful sign-in creates a random, opaque server-side session. The browser receives it in an HttpOnly cookie; the database stores only its SHA-256 hash. Sessions expire after 7 days.
+- Paper orders, the paper portfolio and the AI analyst endpoint require an authenticated session. Each paper order is associated with its account; one account cannot read another account's paper journal through these endpoints.
+- Set `APP_ENV=production`, use HTTPS, and set `FRONTEND_ORIGIN` to the exact deployed frontend origin. Cross-origin frontend requests must include credentials.
+- This is an initial account system, not yet a complete identity platform: email verification, password reset, MFA, account deletion, admin roles, login throttling, security-event audit logs and formal CSRF protections remain to be implemented before public production use. Do not reuse a sensitive password.
+
 ## Paper trading and storage
 Paper orders are recorded in SQLite, not sent to a broker. The default database path is `backend/marketpilot.db`. Set `MARKETPILOT_DB_PATH` to an absolute path on a persistent mounted disk in production. Many hosting filesystems are ephemeral; without a persistent disk, database contents may be lost on redeploy/restart. The API caps each paper order at 100,000 quote-currency units and retains the latest 200 orders in the portfolio response. This is a prototype journal, not a complete accounting ledger.
 
