@@ -250,7 +250,7 @@ async def markets(asset_class:str|None=None):
     if asset_class and asset_class not in {"forex","crypto","stocks","indices"}: raise HTTPException(400,"Unsupported asset class")
     return await get_market_snapshot(asset_class)
 @app.get("/api/candles")
-async def candles(symbol:str=Query(min_length=2,max_length=30),timeframe:str=Query(default="1h"),limit:int=Query(default=250,ge=30,le=500)):
+async def candles(symbol:str=Query(min_length=2,max_length=30),timeframe:str=Query(default="1h"),limit:int=Query(default=1500,ge=30,le=1500)):
     try: return await get_candles(symbol,timeframe,limit)
     except ValueError as exc: raise HTTPException(400,str(exc)) from exc
 @app.get("/api/technical-analysis")
