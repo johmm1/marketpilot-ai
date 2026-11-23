@@ -21,6 +21,8 @@ def _rsi(values, period=14):
     for gain, loss in zip(gains[period:], losses[period:]):
         avg_gain = (avg_gain * (period - 1) + gain) / period
         avg_loss = (avg_loss * (period - 1) + loss) / period
+    if avg_loss == 0 and avg_gain == 0:
+        return 50.0
     if avg_loss == 0:
         return 100.0
     return 100 - (100 / (1 + avg_gain / avg_loss))
