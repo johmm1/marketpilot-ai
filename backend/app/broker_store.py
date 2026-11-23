@@ -96,7 +96,10 @@ def consume_oauth_state(state: str, provider: str) -> str:
     with connect() as db:
         row=db.execute("SELECT user_id,provider,expires_at FROM broker_oauth_states WHERE state_hash=?",(digest,)).fetchone()
         db.execute("DELETE FROM broker_oauth_states WHERE state_hash=?",(digest,))
-    if not row or row["provider"]!=provider or row["expires_at"]<=now:
+    expires_at=row["expires_at"] if row else now
+    if isinstance(expires_at,str):
+        expires_at=datetime.fromisoformat(expires_at)
+    if not row or row["provider"]!=provider or expires_at<=now:
         raise HTTPException(400,"OAuth state is invalid or expired. Start the connection again.")
     return str(row["user_id"])
 
