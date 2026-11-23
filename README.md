@@ -1,6 +1,6 @@
 # MARKETPILOT AI
 
-Responsive Next.js PWA + FastAPI market-intelligence and paper-trading workspace.
+Responsive Next.js PWA + FastAPI market-intelligence and paper-trading workspace, with a Windows desktop shell.
 
 ## Dashboard
 - Multi-asset watchlist: forex, crypto, stocks and indices.
@@ -9,7 +9,30 @@ Responsive Next.js PWA + FastAPI market-intelligence and paper-trading workspace
 - Transparent rule-based signal summary derived from candle indicators.
 - Paper portfolio, position summary and recent order journal.
 - Optional OpenAI market-education analyst. API key is backend-only.
-- Responsive browser UI and PWA manifest support.
+- Responsive browser UI and installable PWA support.
+
+## Cross-platform clients
+
+### Web
+Deploy the Next.js frontend and FastAPI backend separately. Set `NEXT_PUBLIC_API_URL` to the HTTPS backend origin at frontend build time.
+
+### Android
+The responsive PWA can be installed from a supported mobile browser using its browser menu's **Install app** or **Add to Home screen** action. The service worker caches the offline information page and static Next.js assets. Market data, analyst requests and portfolio services still require an internet connection. This PWA route does not yet produce a Play Store APK.
+
+### Windows desktop
+The Electron shell displays the deployed web application in a hardened desktop window. It does not automate or inject into broker dashboards.
+
+Requirements: Windows 10/11 x64 and Node.js 20 or later.
+
+PowerShell:
+```powershell
+cd desktop
+npm install
+$env:MARKETPILOT_WEB_URL="https://YOUR-DEPLOYED-FRONTEND"
+npm run package:win
+```
+
+The installer is generated under `desktop/release/`. For local development, start the frontend on `http://localhost:3000`, then run `npm start` from `desktop`. Production requires HTTPS. The desktop client needs an internet connection and a deployed frontend/backend; it is not a self-contained offline trading engine.
 
 ## Market data provenance
 - BTC/USD and ETH/USD quotes/candles use Binance public endpoints when reachable.
@@ -46,7 +69,7 @@ cd frontend
 npm install
 cp .env.example .env.local
 npm run dev
-```
+``
 Open http://localhost:3000 and API docs at http://localhost:8000/docs.
 
 ## Deployment configuration
@@ -63,5 +86,6 @@ Open http://localhost:3000 and API docs at http://localhost:8000/docs.
 - Paper order positions are derived from a limited recent-order window; no realized P&L, fees, margin, FX conversion or broker reconciliation is implemented.
 - No broker is connected. Live trading is not implemented and must remain disabled.
 - Other asset classes require suitable licensed data providers and exchange/session handling.
+- The Android client is currently an installable PWA, not a signed APK. The Windows Electron installer has not been built or tested by this repository change.
 - Before production trading: implement authentication, authorization, rate limiting, persistent audit logs, a full accounting ledger, realistic fees/slippage, broker paper trading, model evaluation/walk-forward validation, risk limits, kill switch, idempotency, reconciliation, monitoring and explicit user authorization.
 - No profitability is guaranteed. Trading can result in loss.
