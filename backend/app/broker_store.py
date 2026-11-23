@@ -122,3 +122,28 @@ def consume_oauth_state(state: str, provider: str) -> str:
     if not row or row["provider"]!=provider or row["expires_at"]<=now:
         raise HTTPException(400,"OAuth state is invalid or expired. Start the connection again.")
     return row["user_id"]
+
+def create_mt5_bridge_token(user_id: str) -> str:
+    token=secrets.token_urlsafe(40)
+    digest=hashlib.sha256(token.encode()).hexdigest()
+    now=datetime.now(timezone.utc).isoformat()
+    with _db() as db:
+        db.execute("""CREATE TABLE IF NOT EXISTS mt5_bridge_tokens (
+            token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),
+            created_at TEXT NOT NULL,last_seen_at TEXT)""")
+        db.execute("DELETE FROM mt5_bridge_tokens WHERE user_id=?",(user_id,))
+        db.execute("INSERT INTO mt5_bridge_tokens(token_hash,user_id,created_at,last_seen_at) VALUES (?,?,?,NULL)",
+                   (digest,user_id,now))
+    return token
+
+
+def verify_mt5_bridge_token(token: str) -> str:
+    if not token or len(token)>256: raise HTTPException(401,"Invalid bridge token")
+    digest=hashlib.sha256(token.encode()).hexdigest()
+    now=datetime.now(timezone.utc).isoformat()
+    with _db() as db:
+        row=db.execute("SELECT user_id FROM mt5_bridge_tokens WHERE token_hash=?",(digest,)).fetchone()
+        if row:
+            db.execute("UPDATE mt5_bridge_tokens SET last_seen_at=? WHERE token_hash=?",(now,digest))
+    if not row: raise HTTPException(401,"Invalid bridge token")
+    return row["user_id"]
