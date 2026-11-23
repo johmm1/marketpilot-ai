@@ -13,7 +13,15 @@ from .brokers import list_providers,probe_provider
 from .broker_store import (initialize_broker_store,save_connection,get_connection,list_connections,delete_connection,create_oauth_state,consume_oauth_state,create_mt5_bridge_token,verify_mt5_bridge_token)
 import httpx
 app=FastAPI(title="MARKETPILOT AI API",version="0.5.0",description="Market data and authenticated paper trading; live execution disabled.")
-app.add_middleware(CORSMiddleware,allow_origins=[settings.frontend_origin],allow_credentials=True,allow_methods=["GET","POST"],allow_headers=["Content-Type"])
+app.add_middleware(CORSMiddleware,allow_origins=[settings.frontend_origin],allow_credentials=True,allow_methods=["GET","POST","DELETE"],allow_headers=["Content-Type","Authorization"])
+
+@app.middleware("http")
+async def enforce_browser_origin(request:Request,call_next):
+    if request.method in {"POST","PUT","PATCH","DELETE"} and request.url.path!="/api/brokers/mt5-bridge/snapshot":
+        if request.headers.get("origin") != settings.frontend_origin:
+            return Response("Request origin is not allowed",status_code=403)
+    return await call_next(request)
+
 @app.on_event("startup")
 def startup():
     initialize(); initialize_auth(); initialize_broker_store()
@@ -160,6 +168,8 @@ def mt5_bridge_snapshot(payload:dict,authorization:str|None=Header(default=None)
     account=payload.get("account") or {}
     if not account.get("login") or not account.get("server"):
         raise HTTPException(400,"MT5 snapshot is missing account identity")
+    if int(account.get("trade_mode",0)) != 0:
+        raise HTTPException(403,"MT5 bridge accepts DEMO account snapshots only")
     save_connection(user_id,"metatrader5","Windows MT5 bridge","read_only",
                     {"snapshot":payload},
                     {"account_login":str(account["login"]),"server":str(account["server"]),
