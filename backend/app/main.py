@@ -14,7 +14,7 @@ from .broker_store import (initialize_broker_store,save_connection,get_connectio
 import httpx
 from .db import connect
 from .ai_providers import analyze_text, analyze_image, provider_status
-app=FastAPI(title="MARKETPILOT AI API",version="0.6.0",description="Multi-market intelligence, OpenAI analyst and persistent paper trading; live execution remains locked.")
+app=FastAPI(title="MARKETPILOT AI API",version="0.6.0",description="Multi-market intelligence, multi-provider AI analysis and persistent paper trading; live execution remains locked.")
 app.add_middleware(CORSMiddleware,allow_origins=[settings.frontend_origin],allow_credentials=True,allow_methods=["GET","POST","DELETE"],allow_headers=["Content-Type","Authorization"])
 
 @app.middleware("http")
