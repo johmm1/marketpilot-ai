@@ -235,3 +235,22 @@ This document is an engineering plan, not legal advice or confirmation that any 
 - No public claim of guaranteed returns, a guaranteed win rate or "beating strong-form EMH".
 - No live auto-trading unlock by default.
 - No broker integration advertised beyond what has actually been implemented and tested.
+
+## 14. Scope clarification — extend the existing MARKETPILOT application
+
+This plan is an enhancement roadmap for the existing MARKETPILOT repository and deployed application. It is NOT a proposal to create a separate product, replace the current application, restart development from scratch, or rebuild existing working features.
+
+Implementation rules:
+- Keep the current GitHub repository, production domains, Next.js frontend, FastAPI backend, Electron companion, authentication, AI provider integration, screen-sharing workflow, market dashboard, signal desk, broker connections and MT5 demo bridge.
+- Add new capabilities into the existing pages, components, API modules, database and deployment pipeline wherever practical.
+- Preserve existing working behaviour and user data. Use backward-compatible database migrations and API changes.
+- Reuse current AI providers and broker adapters; improve their capabilities rather than creating duplicate services.
+- Add beginner education as a new section or guided overlay inside the existing dashboard, not as a separate application.
+- Add ML research, inference and model versioning as new backend modules that feed the existing analyst and signal experience.
+- Extend the existing recommendation and order workflows for risk explanations, approvals and future live execution. Do not create a parallel trading dashboard.
+- Extend existing broker integrations one at a time. Clearly label current capabilities; do not imply a scaffold is a working live connector.
+- Keep the current UI identity and navigation unless a focused usability improvement is needed. Do not redesign the whole interface without a specific reason.
+- Work incrementally: inspect the current implementation, make one cohesive enhancement, test it, commit to main, deploy, and verify before proceeding.
+- Do not remove or replace existing features unless the user explicitly requests it.
+
+The immediate next step is therefore a codebase audit and reliability fix within the existing app (especially the currently reported paper portfolio API issue and PostgreSQL schema initialization), followed by incremental additions to the existing dashboard.
