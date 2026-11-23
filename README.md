@@ -57,7 +57,7 @@ Endpoints:
 Broker connection workflows are now implemented as follows:
 - **Credential vault:** per-user credentials and OAuth tokens are encrypted at rest using Fernet. Configure a persistent `BROKER_ENCRYPTION_KEY`; losing/changing it makes existing encrypted connections unreadable. Generate one with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
 - **Binance Spot Testnet:** the dashboard can save a Testnet API key/secret and request signed account information. It does not expose order endpoints. Use read-only permissions and disable withdrawals.
-- **cTrader:** OAuth authorization requests the `accounts` read-only scope. Configure `CTRADER_CLIENT_ID`, `CTRADER_CLIENT_SECRET`, and `CTRADER_REDIRECT_URI`; register that exact redirect URI in the cTrader developer portal. Authorization-code exchange and token refresh are implemented. The Protobuf account-list/account-auth WebSocket handshake is still required to enumerate account IDs and stream account data.
+- **cTrader:** OAuth authorization requests the `accounts` read-only scope. Configure `CTRADER_CLIENT_ID`, `CTRADER_CLIENT_SECRET`, and `CTRADER_REDIRECT_URI`; register that exact redirect URI in the cTrader developer portal. Authorization-code exchange and token refresh are implemented. The Spotware-maintained Python SDK worker performs the read-only account-list handshake and demo-account reconciliation; run it as a separate scheduled worker.
 - **MetaTrader 5:** `bridge/mt5_agent.py` is a Windows companion that pairs using a one-time bearer token and uploads account/positions/pending-order snapshots. It refuses non-demo accounts by default and contains no order-submission calls. Install `bridge/requirements.txt`, configure `MARKETPILOT_API_BASE` and `MARKETPILOT_MT5_BRIDGE_TOKEN`, then run the agent from a Windows host with the official MT5 terminal installed and logged into a demo account.
 - Disconnecting a saved connection removes its encrypted credential record. Generating a new MT5 bridge token invalidates the previous token.
 
@@ -110,6 +110,15 @@ Open http://localhost:3000 and API docs at http://localhost:8000/docs.
 - Set `OPENAI_API_KEY`, `BROKER_ENCRYPTION_KEY`, and cTrader OAuth credentials only in backend secrets; never use a `NEXT_PUBLIC_` prefix for secrets.
 - Configure HTTPS and restrict CORS to the exact frontend origin.
 - Confirm health, market, candle, technical-analysis, portfolio and paper-order endpoints after deployment.
+
+## cTrader read-only account sync worker
+
+After cTrader OAuth is configured and a user authorizes the app, run this worker periodically from the repository root. It uses Spotware's official Python SDK, discovers authorized accounts, and reconciles one DEMO account. It does not send trading requests.
+```bash
+pip install -r connectors/ctrader/requirements.txt
+python connectors/ctrader/sync_accounts.py
+```
+The worker needs the same `MARKETPILOT_DB_PATH`, `BROKER_ENCRYPTION_KEY`, `CTRADER_CLIENT_ID`, and `CTRADER_CLIENT_SECRET` values as the backend. Run it as a separate process/scheduled worker; it is not started by the web API automatically.
 
 ## Windows MT5 read-only bridge setup
 
