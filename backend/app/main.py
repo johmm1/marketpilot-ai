@@ -25,9 +25,27 @@ async def enforce_browser_origin(request:Request,call_next):
 
 @app.on_event("startup")
 def startup():
-    initialize(); initialize_auth(); initialize_broker_store()
+    try:
+        initialize(); initialize_auth(); initialize_broker_store()
+    except Exception as exc:
+        if not settings.database_url:
+            raise
+        # Keep public market analysis available while a misconfigured external
+        # database is repaired. Authenticated/persistent features remain unavailable.
+        print(f"MARKETPILOT database initialization deferred: {type(exc).__name__}")
+
 @app.get("/health")
-def health(): return {"status":"ok","environment":settings.app_env,"live_trading_enabled":False,"paper_ledger":"sqlite","authentication":"cookie_session"}
+def health():
+    database_status = "sqlite"
+    if settings.database_url:
+        try:
+            with connect() as db:
+                db.execute("SELECT 1").fetchone()
+            database_status = "connected"
+        except Exception:
+            database_status = "unavailable"
+    return {"status":"ok","environment":settings.app_env,"database":database_status,
+            "live_trading_enabled":False,"authentication":"cookie_session"}
 @app.post("/api/auth/register")
 def auth_register(payload:dict,response:Response):
     return register(str(payload.get("email","")),str(payload.get("password","")),response,settings.app_env=="production")
