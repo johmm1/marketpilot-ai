@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, desktopCapturer, dialog, session } = require('electron');
 const { URL } = require('node:url');
 
 function getAppUrl() {
