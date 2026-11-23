@@ -2,7 +2,7 @@ const { app, BrowserWindow, shell, desktopCapturer, dialog, session } = require(
 const { URL } = require('node:url');
 
 function getAppUrl() {
-  const raw = process.env.MARKETPILOT_WEB_URL || 'http://localhost:3000';
+  const raw = process.env.MARKETPILOT_WEB_URL || 'https://marketpilot-ai-xi.vercel.app';
   let parsed;
   try {
     parsed = new URL(raw);
