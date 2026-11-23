@@ -1,20 +1,35 @@
 # MARKETPILOT AI
 
-Responsive Next.js PWA + FastAPI market-intelligence prototype.
+Responsive Next.js PWA + FastAPI market-intelligence and paper-trading workspace.
 
-## Current market-data and chart features
-- Interactive candlestick chart with volume histogram, crosshair, and 5m / 15m / 1h / 4h / 1d timeframe selection.
-- `GET /api/candles?symbol=BTC%2FUSD&timeframe=1h&limit=150` returns OHLCV candle data.
-- BTC/USD and ETH/USD candles and quote snapshots use Binance public market endpoints when reachable.
-- Other instruments remain illustrative demo data until suitable licensed providers are configured.
-- Charts refresh every 30 seconds and show their source (`BINANCE` or `DEMO`).
+## Dashboard
+- Multi-asset watchlist: forex, crypto, stocks and indices.
+- Interactive candlestick and volume charts with 5m / 15m / 1h / 4h / 1d intervals.
+- Technical-analysis panel: RSI(14), MACD, EMA(20/50/200), Bollinger Bands, 20-candle support/resistance and volume comparison.
+- Transparent rule-based signal summary derived from candle indicators.
+- Paper portfolio, position summary and recent order journal.
+- Optional OpenAI market-education analyst. API key is backend-only.
+- Responsive browser UI and PWA manifest support.
 
-## Safety defaults
-- Demo candles are synthetic illustrative data, never historical exchange records.
-- Signal logic is a transparent demo heuristic, not trained ML.
-- Paper orders are simulated in-memory; no broker is connected.
-- Live execution is not implemented or enabled.
-- OpenAI is optional and configured on the backend only. Never expose API keys in frontend variables.
+## Market data provenance
+- BTC/USD and ETH/USD quotes/candles use Binance public endpoints when reachable.
+- Forex, stocks, indices and other unavailable instruments use illustrative demo data until suitable licensed providers are configured.
+- Every quote, chart and technical-analysis response includes a source/mode label.
+- Synthetic candles are not historical market records. Indicators calculated from them are also DEMO.
+- Provider outages fall back to demo candles; the app labels this rather than implying a live feed.
+
+## API
+- `GET /health` — service status and live-execution lock.
+- `GET /api/markets?asset_class=crypto` — quotes and feed status.
+- `GET /api/candles?symbol=BTC%2FUSD&timeframe=1h&limit=250` — OHLCV candles.
+- `GET /api/technical-analysis?symbol=BTC%2FUSD&timeframe=1h` — computed indicators and rule score.
+- `POST /api/signals` — candle-based educational signal.
+- `POST /api/paper-orders` — validated simulated paper order.
+- `GET /api/portfolio` — recent paper orders and derived positions.
+- `POST /api/analyst` — optional OpenAI educational analyst.
+
+## Paper trading and storage
+Paper orders are recorded in SQLite, not sent to a broker. The default database path is `backend/marketpilot.db`. Set `MARKETPILOT_DB_PATH` to an absolute path on a persistent mounted disk in production. Many hosting filesystems are ephemeral; without a persistent disk, database contents may be lost on redeploy/restart. The API caps each paper order at 100,000 quote-currency units and retains the latest 200 orders in the portfolio response. This is a prototype journal, not a complete accounting ledger.
 
 ## Run backend
 ```bash
@@ -34,5 +49,19 @@ npm run dev
 ```
 Open http://localhost:3000 and API docs at http://localhost:8000/docs.
 
-## Before production
-Connect licensed feeds for each asset class; persist portfolios and audit events; train and walk-forward validate ML models with realistic transaction costs; implement broker paper trading and strict risk controls. Live execution requires separate authorization, account limits, a kill switch, idempotency, reconciliation and monitoring. No profitability is guaranteed.
+## Deployment configuration
+- Set `NEXT_PUBLIC_API_URL` to the deployed backend origin in the frontend environment.
+- Set `FRONTEND_ORIGIN` to the deployed frontend origin in the backend environment.
+- Set `MARKETPILOT_DB_PATH` to a persistent-disk path for a durable paper journal.
+- Set `OPENAI_API_KEY` only in backend secrets; never use a `NEXT_PUBLIC_` prefix for secrets.
+- Configure HTTPS and restrict CORS to the exact frontend origin.
+- Confirm health, market, candle, technical-analysis, portfolio and paper-order endpoints after deployment.
+
+## Important limitations and production gates
+- Technical analysis is deterministic rule-based computation, not trained machine learning.
+- Signals are educational, not personalized financial advice or return forecasts.
+- Paper order positions are derived from a limited recent-order window; no realized P&L, fees, margin, FX conversion or broker reconciliation is implemented.
+- No broker is connected. Live trading is not implemented and must remain disabled.
+- Other asset classes require suitable licensed data providers and exchange/session handling.
+- Before production trading: implement authentication, authorization, rate limiting, persistent audit logs, a full accounting ledger, realistic fees/slippage, broker paper trading, model evaluation/walk-forward validation, risk limits, kill switch, idempotency, reconciliation, monitoring and explicit user authorization.
+- No profitability is guaranteed. Trading can result in loss.
